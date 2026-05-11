@@ -1,0 +1,12 @@
+[Tt]humbs.db
+*.[Oo]bj
+*.user
+*.ncb
+*.suo
+*.[Cc]ache
+*.log
+*.sbr
+*.unsuccessfulbuild
+bin/
+obj/
+.vs/
