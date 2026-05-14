@@ -8,8 +8,8 @@ public sealed class EramKeyboardReader : IDisposable
 	private const int VENDOR_ID = 0x6F75;
 	private const int PRODUCT_ID = 0x0002;
 
-	public event EventHandler<int>? SpecialKeyPressed;
-	public event EventHandler<int>? SpecialKeyReleased;
+	public event EventHandler<EramSpecialKeyEventArgs>? SpecialKeyPressed;
+	public event EventHandler<EramSpecialKeyEventArgs>? SpecialKeyReleased;
 	public event EventHandler<Exception>? ErrorOccurred;
 
 	private readonly KeyboardReader mReader;
@@ -25,8 +25,8 @@ public sealed class EramKeyboardReader : IDisposable
 			vendorId,
 			productId,
 			logger ?? NullLogger<EramKeyboardReader>.Instance,
-			btn => SpecialKeyPressed?.Invoke(this, btn),
-			btn => SpecialKeyReleased?.Invoke(this, btn),
+			btn => SpecialKeyPressed?.Invoke(this, new EramSpecialKeyEventArgs(btn)),
+			btn => SpecialKeyReleased?.Invoke(this, new EramSpecialKeyEventArgs(btn)),
 			ex => ErrorOccurred?.Invoke(this, ex)
 		);
 	}
