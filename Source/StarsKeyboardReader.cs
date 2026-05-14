@@ -5,8 +5,8 @@ namespace Metacraft.VcsHardware;
 
 public sealed class StarsKeyboardReader : IDisposable
 {
-	private const int VENDOR_ID = 28533;
-	private const int PRODUCT_ID = 32906;
+	private const int VENDOR_ID = 0x6F75;
+	private const int PRODUCT_ID = 0x808A;
 
 	public event EventHandler<StarsSpecialKeyEventArgs>? SpecialKeyPressed;
 	public event EventHandler<StarsSpecialKeyEventArgs>? SpecialKeyReleased;

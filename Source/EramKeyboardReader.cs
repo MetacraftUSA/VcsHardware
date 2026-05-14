@@ -5,8 +5,8 @@ namespace Metacraft.VcsHardware;
 
 public sealed class EramKeyboardReader : IDisposable
 {
-	private const int VENDOR_ID = 28533;
-	private const int PRODUCT_ID = 32906;
+	private const int VENDOR_ID = 0x6F75;
+	private const int PRODUCT_ID = 0x0002;
 
 	public event EventHandler<int>? SpecialKeyPressed;
 	public event EventHandler<int>? SpecialKeyReleased;
