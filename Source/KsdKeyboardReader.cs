@@ -14,6 +14,8 @@ public sealed class KsdKeyboardReader : IDisposable
 
 	private readonly KeyboardReader mReader;
 
+	public bool IsKeyboardPresent => mReader.IsKeyboardPresent;
+
 	public KsdKeyboardReader(
 		int vendorId = VENDOR_ID,
 		int productId = PRODUCT_ID,

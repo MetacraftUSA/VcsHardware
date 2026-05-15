@@ -14,6 +14,8 @@ public sealed class StarsKeyboardReader : IDisposable
 
 	private readonly KeyboardReader mReader;
 
+	public bool IsKeyboardPresent => mReader.IsKeyboardPresent;
+
 	public StarsKeyboardReader(
 		int vendorId = VENDOR_ID,
 		int productId = PRODUCT_ID,

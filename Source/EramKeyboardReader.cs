@@ -14,6 +14,8 @@ public sealed class EramKeyboardReader : IDisposable
 
 	private readonly KeyboardReader mReader;
 
+	public bool IsKeyboardPresent => mReader.IsKeyboardPresent;
+
 	public EramKeyboardReader(
 		int vendorId = VENDOR_ID,
 		int productId = PRODUCT_ID,

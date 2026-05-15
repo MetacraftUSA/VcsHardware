@@ -23,6 +23,17 @@ internal sealed class KeyboardReader : IDisposable
 	private RegisteredWaitHandle? mRegistration;
 	private int mIsDisposed;
 
+	public bool IsKeyboardPresent
+	{
+		get
+		{
+			if (Volatile.Read(ref mIsDisposed) != 0) {
+				return false;
+			}
+			return mDevice is not null;
+		}
+	}
+
 	public KeyboardReader(
 		string keyboardName,
 		int vendorId,
