@@ -35,6 +35,7 @@ public abstract class KeyboardReader<TEventArgs> : IDisposable
 	private RegisteredWaitHandle? mRegistration;
 	private int mIsDisposed;
 	private int mScanActive;
+	private bool mWasEverFound;
 
 	public bool IsKeyboardPresent {
 		get {
@@ -116,6 +117,7 @@ public abstract class KeyboardReader<TEventArgs> : IDisposable
 				if (device.Properties.VendorId == VENDOR_ID && device.Properties.ProductId == ProductId) {
 					mDevice = device;
 					device = null;
+					mWasEverFound = true;
 					mLogger?.LogDebug("VCS {KeyboardName} keyboard found", KeyboardName);
 					return;
 				}
@@ -128,7 +130,9 @@ public abstract class KeyboardReader<TEventArgs> : IDisposable
 			}
 		}
 
-		mLogger?.LogDebug("VCS {KeyboardName} keyboard not found", KeyboardName);//fixme only show this if the keyboard was found at least once before
+		if (mWasEverFound) {
+			mLogger?.LogDebug("VCS {KeyboardName} keyboard not found", KeyboardName);
+		}
 	}
 
 	private void StartScan()
