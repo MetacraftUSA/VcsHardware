@@ -8,7 +8,14 @@ on:
 jobs:
   publish:
     runs-on: windows-latest
+    permissions:
+      id-token: write
     steps:
+      - name: NuGet login (OIDC → temp API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -27,4 +34,4 @@ jobs:
         run: dotnet pack Source/Metacraft.VcsHardware.csproj -c Release --no-build -o ./artifacts
 
       - name: Push to NuGet
-        run: dotnet nuget push "./artifacts/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: dotnet nuget push "./artifacts/*.nupkg" --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json --skip-duplicate
