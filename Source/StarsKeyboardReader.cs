@@ -11,6 +11,8 @@ public sealed class StarsKeyboardReader : IDisposable
 	public event EventHandler<StarsSpecialKeyEventArgs>? SpecialKeyPressed;
 	public event EventHandler<StarsSpecialKeyEventArgs>? SpecialKeyReleased;
 	public event EventHandler<Exception>? ErrorOccurred;
+	public event EventHandler? KeyboardConnected;
+	public event EventHandler? KeyboardDisconnected;
 
 	private readonly KeyboardReader mReader;
 
@@ -29,7 +31,9 @@ public sealed class StarsKeyboardReader : IDisposable
 			logger ?? NullLogger<StarsKeyboardReader>.Instance,
 			btn => SpecialKeyPressed?.Invoke(this, new StarsSpecialKeyEventArgs(btn.ToStarsSpecialKey())),
 			btn => SpecialKeyReleased?.Invoke(this, new StarsSpecialKeyEventArgs(btn.ToStarsSpecialKey())),
-			ex => ErrorOccurred?.Invoke(this, ex)
+			ex => ErrorOccurred?.Invoke(this, ex),
+			() => KeyboardConnected?.Invoke(this, EventArgs.Empty),
+			() => KeyboardDisconnected?.Invoke(this, EventArgs.Empty)
 		);
 	}
 

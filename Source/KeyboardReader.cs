@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SharpDX;
 using SharpDX.DirectInput;
@@ -8,6 +8,14 @@ namespace Metacraft.VcsHardware;
 internal sealed class KeyboardReader : IDisposable
 {
 	private const int BUFFER_SIZE = 128;
+
+	// DirectInput "device is gone" HRESULTs. An unplugged or otherwise
+	// inaccessible device surfaces as one of these; they are expected
+	// operational states, not errors.
+	private const int DIERR_INPUTLOST = unchecked((int)0x8007001E);
+	private const int DIERR_NOTACQUIRED = unchecked((int)0x8007001C);
+	private const int DIERR_UNPLUGGED = unchecked((int)0x80040209);
+
 	private readonly string mKeyboardName;
 	private readonly int mVendorId;
 	private readonly int mProductId;
@@ -15,6 +23,8 @@ internal sealed class KeyboardReader : IDisposable
 	private readonly Action<int> mKeyPressedAction;
 	private readonly Action<int> mKeyReleasedAction;
 	private readonly Action<Exception> mErrorAction;
+	private readonly Action mConnectedAction;
+	private readonly Action mDisconnectedAction;
 	private readonly Timer mCheckTimer;
 	private readonly DirectInput mDirectInput = new();
 	private readonly object mScanLock = new();
@@ -22,6 +32,7 @@ internal sealed class KeyboardReader : IDisposable
 	private AutoResetEvent? mWaitHandle;
 	private RegisteredWaitHandle? mRegistration;
 	private int mIsDisposed;
+	private int mScanActive;
 
 	public bool IsKeyboardPresent
 	{
@@ -30,7 +41,7 @@ internal sealed class KeyboardReader : IDisposable
 			if (Volatile.Read(ref mIsDisposed) != 0) {
 				return false;
 			}
-			return mDevice is not null;
+			return Volatile.Read(ref mScanActive) != 0;
 		}
 	}
 
@@ -41,7 +52,9 @@ internal sealed class KeyboardReader : IDisposable
 		ILogger logger,
 		Action<int> keyPressedAction,
 		Action<int> keyReleasedAction,
-		Action<Exception> errorAction
+		Action<Exception> errorAction,
+		Action connectedAction,
+		Action disconnectedAction
 	)
 	{
 		mKeyboardName = keyboardName;
@@ -51,6 +64,8 @@ internal sealed class KeyboardReader : IDisposable
 		mKeyPressedAction = keyPressedAction;
 		mKeyReleasedAction = keyReleasedAction;
 		mErrorAction = errorAction;
+		mConnectedAction = connectedAction;
+		mDisconnectedAction = disconnectedAction;
 
 		mCheckTimer = new Timer(DoCheck);
 		mCheckTimer.Change(1000, Timeout.Infinite);
@@ -62,6 +77,7 @@ internal sealed class KeyboardReader : IDisposable
 			return;
 		}
 
+		bool justConnected = false;
 		try {
 			lock (mScanLock) {
 				if (Volatile.Read(ref mIsDisposed) != 0) {
@@ -72,8 +88,13 @@ internal sealed class KeyboardReader : IDisposable
 					CheckForDevice();
 					if (mDevice is not null) {
 						StartScan();
+						justConnected = Volatile.Read(ref mScanActive) != 0;
 					}
 				}
+			}
+
+			if (justConnected && Volatile.Read(ref mIsDisposed) == 0) {
+				mConnectedAction();
 			}
 		}
 		catch (Exception ex) {
@@ -142,6 +163,7 @@ internal sealed class KeyboardReader : IDisposable
 			mDevice.Properties.BufferSize = BUFFER_SIZE;
 			mDevice.SetNotification(mWaitHandle);
 			mDevice.Acquire();
+			Volatile.Write(ref mScanActive, 1);
 		}
 		catch (Exception ex) {
 			mLogger?.LogError(ex, "Failed to start scan; tearing down partial state");
@@ -151,6 +173,8 @@ internal sealed class KeyboardReader : IDisposable
 
 	private void TeardownScan()
 	{
+		Volatile.Write(ref mScanActive, 0);
+
 		// Pass null here rather than waiting on a handle: this method may
 		// be called from inside OnSignaled (the error path), and waiting
 		// for the callback to finish from within itself would deadlock.
@@ -167,9 +191,48 @@ internal sealed class KeyboardReader : IDisposable
 		mWaitHandle = null;
 	}
 
+	private static bool IsDeviceLost(SharpDXException ex)
+	{
+		int hr = ex.HResult;
+		return hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED || hr == DIERR_UNPLUGGED;
+	}
+
+	private void HandleDisconnect()
+	{
+		// Only the first caller to flip 1 -> 0 wins, so concurrent OnSignaled
+		// callbacks coalesce into a single disconnect event and a single teardown.
+		if (Interlocked.Exchange(ref mScanActive, 0) == 0) {
+			return;
+		}
+
+		// Take the lock to serialize with timer-driven StartScan, but skip
+		// if we can't get it immediately — Dispose may be in progress and
+		// holding the lock while waiting for us to return.
+		if (Monitor.TryEnter(mScanLock)) {
+			try {
+				if (Volatile.Read(ref mIsDisposed) == 0) {
+					TeardownScan();
+				}
+			}
+			finally {
+				Monitor.Exit(mScanLock);
+			}
+		}
+
+		if (Volatile.Read(ref mIsDisposed) == 0) {
+			mDisconnectedAction();
+		}
+	}
+
 	private void OnSignaled(object? state, bool timedOut)
 	{
 		if (Volatile.Read(ref mIsDisposed) != 0) {
+			return;
+		}
+
+		// A concurrent callback may have already torn down the scan; bail
+		// before we touch a device that's being disposed.
+		if (Volatile.Read(ref mScanActive) == 0) {
 			return;
 		}
 
@@ -197,24 +260,14 @@ internal sealed class KeyboardReader : IDisposable
 				}
 			}
 		}
+		catch (SharpDXException ex) when (IsDeviceLost(ex)) {
+			mLogger?.LogInformation("{KeyboardName} disconnected", mKeyboardName);
+			HandleDisconnect();
+		}
 		catch (Exception ex) {
 			mLogger?.LogError(ex, "Error reading device data, stopping scan");
 			mErrorAction(ex);
-
-			// Tear down so the polling timer will reconnect on the next tick.
-			// Take the lock to serialize with timer-driven StartScan, but skip
-			// if we can't get it immediately — Dispose may be in progress and
-			// holding the lock while waiting for us to return.
-			if (Monitor.TryEnter(mScanLock)) {
-				try {
-					if (Volatile.Read(ref mIsDisposed) == 0) {
-						TeardownScan();
-					}
-				}
-				finally {
-					Monitor.Exit(mScanLock);
-				}
-			}
+			HandleDisconnect();
 		}
 	}
 
@@ -238,6 +291,8 @@ internal sealed class KeyboardReader : IDisposable
 		// handle to block until the callback finishes; this is safe here
 		// because Dispose is never called from OnSignaled itself.
 		lock (mScanLock) {
+			Volatile.Write(ref mScanActive, 0);
+
 			if (mRegistration is not null) {
 				using ManualResetEvent unregistered = new(initialState: false);
 				mRegistration.Unregister(unregistered);

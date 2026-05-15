@@ -11,6 +11,8 @@ public sealed class KsdKeyboardReader : IDisposable
 	public event EventHandler<KsdSpecialKeyEventArgs>? SpecialKeyPressed;
 	public event EventHandler<KsdSpecialKeyEventArgs>? SpecialKeyReleased;
 	public event EventHandler<Exception>? ErrorOccurred;
+	public event EventHandler? KeyboardConnected;
+	public event EventHandler? KeyboardDisconnected;
 
 	private readonly KeyboardReader mReader;
 
@@ -29,7 +31,9 @@ public sealed class KsdKeyboardReader : IDisposable
 			logger ?? NullLogger<KsdKeyboardReader>.Instance,
 			btn => SpecialKeyPressed?.Invoke(this, new KsdSpecialKeyEventArgs(btn.ToKsdSpecialKey())),
 			btn => SpecialKeyReleased?.Invoke(this, new KsdSpecialKeyEventArgs(btn.ToKsdSpecialKey())),
-			ex => ErrorOccurred?.Invoke(this, ex)
+			ex => ErrorOccurred?.Invoke(this, ex),
+			() => KeyboardConnected?.Invoke(this, EventArgs.Empty),
+			() => KeyboardDisconnected?.Invoke(this, EventArgs.Empty)
 		);
 	}
 
