@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SharpDX;
@@ -5,6 +6,7 @@ using SharpDX.DirectInput;
 
 namespace Metacraft.VcsHardware;
 
+[EditorBrowsable(EditorBrowsableState.Never)]
 public abstract class KeyboardReader<TEventArgs> : IDisposable
 	where TEventArgs : EventArgs
 {
