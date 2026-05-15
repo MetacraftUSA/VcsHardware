@@ -241,8 +241,10 @@ public abstract class KeyboardReader<TEventArgs> : IDisposable
 				bool pressed = (update.Value & 0x80) != 0;
 
 				if (pressed) {
+					mLogger?.LogDebug("VCS {KeyboardName} keyboard key {ButtonIndex} pressed", KeyboardName, buttonIndex);
 					SpecialKeyPressed?.Invoke(this, ToEventArgs(buttonIndex));
 				} else {
+					mLogger?.LogDebug("VCS {KeyboardName} keyboard key {ButtonIndex} released", KeyboardName, buttonIndex);
 					SpecialKeyReleased?.Invoke(this, ToEventArgs(buttonIndex));
 				}
 			}

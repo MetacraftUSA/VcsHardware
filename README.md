@@ -55,7 +55,7 @@ using var reader = new StarsKeyboardReader(
     logger: serviceProvider.GetRequiredService<ILogger<StarsKeyboardReader>>());
 ```
 
-Internally the readers log device-found / not-found at `Debug`, disconnects at `Information`, and unexpected failures at `Error`.
+Internally the readers log device-found / not-found and individual key press / release events at `Debug`, disconnects at `Information`, and unexpected failures at `Error`.
 
 ## Requirements
 
