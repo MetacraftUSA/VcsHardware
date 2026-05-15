@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".github/workflows/publish-nuget.yml" />
+  </Folder>
   <Project Path="ConsoleSample/ConsoleSample.csproj" Id="8378ad22-cba0-446a-91b8-9ca5a10e5fad" />
   <Project Path="Source/Metacraft.VcsHardware.csproj" />
 </Solution>
