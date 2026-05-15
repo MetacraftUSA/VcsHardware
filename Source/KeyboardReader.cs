@@ -5,8 +5,10 @@ using SharpDX.DirectInput;
 
 namespace Metacraft.VcsHardware;
 
-internal sealed class KeyboardReader : IDisposable
+public abstract class KeyboardReader<TEventArgs> : IDisposable
+	where TEventArgs : EventArgs
 {
+	private const int VENDOR_ID = 0x6F75;
 	private const int BUFFER_SIZE = 128;
 
 	// DirectInput "device is gone" HRESULTs. An unplugged or otherwise
@@ -16,15 +18,13 @@ internal sealed class KeyboardReader : IDisposable
 	private const int DIERR_NOTACQUIRED = unchecked((int)0x8007001C);
 	private const int DIERR_UNPLUGGED = unchecked((int)0x80040209);
 
-	private readonly string mKeyboardName;
-	private readonly int mVendorId;
-	private readonly int mProductId;
+	public event EventHandler? KeyboardConnected;
+	public event EventHandler? KeyboardDisconnected;
+	public event EventHandler<TEventArgs>? SpecialKeyPressed;
+	public event EventHandler<TEventArgs>? SpecialKeyReleased;
+	public event EventHandler<Exception>? ErrorOccurred;
+
 	private readonly ILogger mLogger;
-	private readonly Action mConnectedAction;
-	private readonly Action mDisconnectedAction;
-	private readonly Action<int> mKeyPressedAction;
-	private readonly Action<int> mKeyReleasedAction;
-	private readonly Action<Exception> mErrorAction;
 	private readonly Timer mCheckTimer;
 	private readonly DirectInput mDirectInput = new();
 	private readonly object mScanLock = new();
@@ -34,10 +34,8 @@ internal sealed class KeyboardReader : IDisposable
 	private int mIsDisposed;
 	private int mScanActive;
 
-	public bool IsKeyboardPresent
-	{
-		get
-		{
+	public bool IsKeyboardPresent {
+		get {
 			if (Volatile.Read(ref mIsDisposed) != 0) {
 				return false;
 			}
@@ -45,31 +43,18 @@ internal sealed class KeyboardReader : IDisposable
 		}
 	}
 
-	public KeyboardReader(
-		string keyboardName,
-		int vendorId,
-		int productId,
-		ILogger logger,
-		Action connectedAction,
-		Action disconnectedAction,
-		Action<int> keyPressedAction,
-		Action<int> keyReleasedAction,
-		Action<Exception> errorAction
-	)
+	protected abstract string KeyboardName { get; }
+	protected abstract int ProductId { get; }
+
+	protected KeyboardReader(ILogger logger)
 	{
-		mKeyboardName = keyboardName;
-		mVendorId = vendorId;
-		mProductId = productId;
 		mLogger = logger ?? NullLogger.Instance;
-		mConnectedAction = connectedAction;
-		mDisconnectedAction = disconnectedAction;
-		mKeyPressedAction = keyPressedAction;
-		mKeyReleasedAction = keyReleasedAction;
-		mErrorAction = errorAction;
 
 		mCheckTimer = new Timer(DoCheck);
 		mCheckTimer.Change(1000, Timeout.Infinite);
 	}
+
+	protected abstract TEventArgs ToEventArgs(int buttonIndex);
 
 	private void DoCheck(object? _)
 	{
@@ -94,12 +79,12 @@ internal sealed class KeyboardReader : IDisposable
 			}
 
 			if (justConnected && Volatile.Read(ref mIsDisposed) == 0) {
-				mConnectedAction();
+				KeyboardConnected?.Invoke(this, EventArgs.Empty);
 			}
 		}
 		catch (Exception ex) {
 			mLogger?.LogError(ex, "Unexpected error during device check");
-			mErrorAction(ex);
+			ErrorOccurred?.Invoke(this, ex);
 		}
 		finally {
 			// Re-arm the timer; guard against the race where Dispose ran
@@ -126,10 +111,10 @@ internal sealed class KeyboardReader : IDisposable
 			Joystick? device = null;
 			try {
 				device = new Joystick(mDirectInput, deviceGuid);
-				if (device.Properties.VendorId == mVendorId && device.Properties.ProductId == mProductId) {
+				if (device.Properties.VendorId == VENDOR_ID && device.Properties.ProductId == ProductId) {
 					mDevice = device;
 					device = null;
-					mLogger?.LogDebug("{KeyboardName} found", mKeyboardName);
+					mLogger?.LogDebug("VCS {KeyboardName} keyboard found", KeyboardName);
 					return;
 				}
 			}
@@ -141,7 +126,7 @@ internal sealed class KeyboardReader : IDisposable
 			}
 		}
 
-		mLogger?.LogDebug("{KeyboardName} not found", mKeyboardName);
+		mLogger?.LogDebug("VCS {KeyboardName} keyboard not found", KeyboardName);//fixme only show this if the keyboard was found at least once before
 	}
 
 	private void StartScan()
@@ -220,7 +205,7 @@ internal sealed class KeyboardReader : IDisposable
 		}
 
 		if (Volatile.Read(ref mIsDisposed) == 0) {
-			mDisconnectedAction();
+			KeyboardDisconnected?.Invoke(this, EventArgs.Empty);
 		}
 	}
 
@@ -254,19 +239,19 @@ internal sealed class KeyboardReader : IDisposable
 				bool pressed = (update.Value & 0x80) != 0;
 
 				if (pressed) {
-					mKeyPressedAction(buttonIndex);
+					SpecialKeyPressed?.Invoke(this, ToEventArgs(buttonIndex));
 				} else {
-					mKeyReleasedAction(buttonIndex);
+					SpecialKeyReleased?.Invoke(this, ToEventArgs(buttonIndex));
 				}
 			}
 		}
 		catch (SharpDXException ex) when (IsDeviceLost(ex)) {
-			mLogger?.LogInformation("{KeyboardName} disconnected", mKeyboardName);
+			mLogger?.LogInformation("VCS {KeyboardName} keyboard disconnected", KeyboardName);
 			HandleDisconnect();
 		}
 		catch (Exception ex) {
 			mLogger?.LogError(ex, "Error reading device data, stopping scan");
-			mErrorAction(ex);
+			ErrorOccurred?.Invoke(this, ex);
 			HandleDisconnect();
 		}
 	}
@@ -276,6 +261,8 @@ internal sealed class KeyboardReader : IDisposable
 		if (Interlocked.Exchange(ref mIsDisposed, 1) != 0) {
 			return;
 		}
+
+		GC.SuppressFinalize(this);
 
 		// Stop the timer first so no new DoCheck callbacks start. Dispose with
 		// a wait handle to block until any in-flight tick completes.
