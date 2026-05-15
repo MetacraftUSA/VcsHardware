@@ -20,11 +20,11 @@ internal sealed class KeyboardReader : IDisposable
 	private readonly int mVendorId;
 	private readonly int mProductId;
 	private readonly ILogger mLogger;
+	private readonly Action mConnectedAction;
+	private readonly Action mDisconnectedAction;
 	private readonly Action<int> mKeyPressedAction;
 	private readonly Action<int> mKeyReleasedAction;
 	private readonly Action<Exception> mErrorAction;
-	private readonly Action mConnectedAction;
-	private readonly Action mDisconnectedAction;
 	private readonly Timer mCheckTimer;
 	private readonly DirectInput mDirectInput = new();
 	private readonly object mScanLock = new();
@@ -50,22 +50,22 @@ internal sealed class KeyboardReader : IDisposable
 		int vendorId,
 		int productId,
 		ILogger logger,
+		Action connectedAction,
+		Action disconnectedAction,
 		Action<int> keyPressedAction,
 		Action<int> keyReleasedAction,
-		Action<Exception> errorAction,
-		Action connectedAction,
-		Action disconnectedAction
+		Action<Exception> errorAction
 	)
 	{
 		mKeyboardName = keyboardName;
 		mVendorId = vendorId;
 		mProductId = productId;
 		mLogger = logger ?? NullLogger.Instance;
+		mConnectedAction = connectedAction;
+		mDisconnectedAction = disconnectedAction;
 		mKeyPressedAction = keyPressedAction;
 		mKeyReleasedAction = keyReleasedAction;
 		mErrorAction = errorAction;
-		mConnectedAction = connectedAction;
-		mDisconnectedAction = disconnectedAction;
 
 		mCheckTimer = new Timer(DoCheck);
 		mCheckTimer.Change(1000, Timeout.Infinite);

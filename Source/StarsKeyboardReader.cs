@@ -8,11 +8,11 @@ public sealed class StarsKeyboardReader : IDisposable
 	private const int VENDOR_ID = 0x6F75;
 	private const int PRODUCT_ID = 0x808A;
 
+	public event EventHandler? KeyboardConnected;
+	public event EventHandler? KeyboardDisconnected;
 	public event EventHandler<StarsSpecialKeyEventArgs>? SpecialKeyPressed;
 	public event EventHandler<StarsSpecialKeyEventArgs>? SpecialKeyReleased;
 	public event EventHandler<Exception>? ErrorOccurred;
-	public event EventHandler? KeyboardConnected;
-	public event EventHandler? KeyboardDisconnected;
 
 	private readonly KeyboardReader mReader;
 
@@ -29,11 +29,11 @@ public sealed class StarsKeyboardReader : IDisposable
 			vendorId,
 			productId,
 			logger ?? NullLogger<StarsKeyboardReader>.Instance,
+			() => KeyboardConnected?.Invoke(this, EventArgs.Empty),
+			() => KeyboardDisconnected?.Invoke(this, EventArgs.Empty),
 			btn => SpecialKeyPressed?.Invoke(this, new StarsSpecialKeyEventArgs(btn.ToStarsSpecialKey())),
 			btn => SpecialKeyReleased?.Invoke(this, new StarsSpecialKeyEventArgs(btn.ToStarsSpecialKey())),
-			ex => ErrorOccurred?.Invoke(this, ex),
-			() => KeyboardConnected?.Invoke(this, EventArgs.Empty),
-			() => KeyboardDisconnected?.Invoke(this, EventArgs.Empty)
+			ex => ErrorOccurred?.Invoke(this, ex)
 		);
 	}
 
