@@ -87,6 +87,8 @@ internal static class StarsSpecialKeyExtensions
 			40 => StarsSpecialKey.TgtGen,
 			41 => StarsSpecialKey.F16,
 			80 => StarsSpecialKey.Min,
+			81 => StarsSpecialKey.WhiteBlank2,
+			83 => StarsSpecialKey.WhiteBlank3,
 			_ => StarsSpecialKey.NoOp
 		};
 	}
