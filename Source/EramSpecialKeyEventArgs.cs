@@ -1,6 +1,6 @@
 namespace Metacraft.VcsHardware;
 
-public class EramSpecialKeyEventArgs(int buttonIndex) : EventArgs
+public class EramSpecialKeyEventArgs(EramSpecialKey key) : EventArgs
 {
-	public int ButtonIndex { get; } = buttonIndex;
+	public EramSpecialKey Key { get; } = key;
 }

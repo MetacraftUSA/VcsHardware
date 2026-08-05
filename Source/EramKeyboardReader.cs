@@ -8,5 +8,5 @@ public sealed class EramKeyboardReader(ILogger<EramKeyboardReader>? logger = nul
 {
 	protected override string KeyboardName => "ERAM";
 	protected override int ProductId => 0x0002;
-	protected override EramSpecialKeyEventArgs ToEventArgs(int buttonIndex) => new(buttonIndex);
+	protected override EramSpecialKeyEventArgs ToEventArgs(int buttonIndex) => new(buttonIndex.ToEramSpecialKey());
 }

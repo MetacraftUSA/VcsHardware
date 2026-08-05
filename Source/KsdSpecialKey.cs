@@ -2,25 +2,34 @@
 
 public enum KsdSpecialKey
 {
-	K1 = 0,
-	K2 = 1,
-	K3 = 2,
-	K4 = 3,
-	K5 = 4,
-	K6 = 5,
-	K7 = 6,
-	K8 = 7,
-	K9 = 8,
-	RangeInc = 9,
-	RangeDec = 11,
-	VectorInc = 10,
-	VectorDec = 12
+	NoOp = 0,
+
+	K1 = 1,
+	K2 = 2,
+	K3 = 3,
+	K4 = 4,
+	K5 = 5,
+	K6 = 6,
+	K7 = 7,
+	K8 = 8,
+	K9 = 9,
+
+	RangeInc = 10,
+	RangeDec = 12,
+
+	VectorInc = 11,
+	VectorDec = 13
 }
 
 internal static class KsdSpecialKeyExtensions
 {
 	public static KsdSpecialKey ToKsdSpecialKey(this int buttonIndex)
 	{
-		return (KsdSpecialKey)buttonIndex;
+		try {
+			return (KsdSpecialKey)(buttonIndex + 1);
+		}
+		catch {
+			return KsdSpecialKey.NoOp;
+		}
 	}
 }
