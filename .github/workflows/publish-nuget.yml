@@ -1,3 +1,8 @@
+# Builds, Authenticode-signs, and publishes the package to NuGet.org,
+# triggered by pushing a v* tag.
+#
+# Required repository secrets: NUGET_USER, AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
+
 name: Publish to NuGet
 
 on:
@@ -29,6 +34,31 @@ jobs:
 
       - name: Build
         run: dotnet build Source/Metacraft.VcsHardware.csproj -c Release --no-restore
+
+      # azure/trusted-signing-action installs its TrustedSigning module from
+      # PSGallery, which is not registered by default on the runner image
+      # (fails with "Unable to find repository 'PSGallery'").
+      - name: Ensure PSGallery is registered
+        shell: pwsh
+        run: |
+          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+          if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+            Register-PSRepository -Default
+          }
+
+      - name: Sign assembly       # signed BEFORE packing, so the package carries the signed DLL
+        uses: azure/trusted-signing-action@v0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: https://eus.codesigning.azure.net/
+          trusted-signing-account-name: MetacraftTrustedSigning
+          certificate-profile-name: CodeSigning
+          files: ${{ github.workspace }}\Source\bin\Release\net8.0\Metacraft.VcsHardware.dll
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
 
       - name: Pack
         run: dotnet pack Source/Metacraft.VcsHardware.csproj -c Release --no-build -o ./artifacts

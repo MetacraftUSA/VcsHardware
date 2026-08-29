@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"/c/Code/SimSuite\" && grep -n -i -A6 -B3 \"sign\" .github/workflows/release.yml | head -120)",
+      "Bash(gh secret *)",
+      "PowerShell(gh secret list --repo MetacraftUSA/VcsHardware)"
+    ]
+  }
+}
