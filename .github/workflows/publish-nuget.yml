@@ -84,6 +84,9 @@ jobs:
       - name: Push to NuGet.org
         shell: pwsh
         run: |
+          # Check each push: the step's own exit code only reflects the last
+          # file, so without this a failed push scrolls by and the step passes.
           Get-ChildItem .\artifacts\*.nupkg | ForEach-Object {
             dotnet nuget push $_.FullName --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json
+            if ($LASTEXITCODE -ne 0) { throw "Push failed for $($_.Name)." }
           }

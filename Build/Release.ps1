@@ -239,9 +239,12 @@ if ($NoWatch) {
 # it doesn't, fall back to matching the run by its title, which the workflow
 # sets from the ref via run-name.
 $runId = $null
+$runIdSource = $null
 if ($dispatchOutput -match 'actions/runs/(\d+)') {
     $runId = $Matches[1]
+    $runIdSource = 'run URL returned by gh workflow run'
 } else {
+    $runIdSource = 'title lookup fallback (gh returned no run URL)'
     Write-Host "No run URL returned; looking up the run by title..." -ForegroundColor DarkGray
     $deadline = (Get-Date).AddSeconds(60)
     while (-not $runId -and (Get-Date) -lt $deadline) {
@@ -265,5 +268,8 @@ if ($LASTEXITCODE -ne 0) {
     throw "Publish failed for v$Version."
 }
 
+# Reported after the watch, not before: gh run watch repaints the screen, so
+# anything printed earlier is gone by the time the run finishes.
 Write-Host ""
 Write-Host "Release v$Version published." -ForegroundColor Green
+Write-Host "Run $runId - found via $runIdSource." -ForegroundColor DarkGray
