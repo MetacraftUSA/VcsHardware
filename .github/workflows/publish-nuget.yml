@@ -1,13 +1,17 @@
-# Builds, Authenticode-signs, and publishes the package to NuGet.org,
-# triggered by pushing a v* tag.
+# Builds, Authenticode-signs, and publishes the package to NuGet.org.
+#
+# Dispatched by Build/Release.ps1 against the release tag it just pushed, e.g.
+#   gh workflow run publish-nuget.yml --ref v2.0.1
+# There is deliberately no tag-push trigger: the script dispatches so it can get
+# a run ID back and stream the result. The version comes from the csproj in the
+# dispatched ref, which the script bumped in the tagged commit.
 #
 # Required repository secrets: NUGET_USER, AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
 
 name: Publish to NuGet
+run-name: Release ${{ github.ref_name }}
 
 on:
-  push:
-    tags: [ 'v*' ]
   workflow_dispatch:
 
 jobs:
@@ -28,6 +32,20 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+
+      # Release.ps1 writes the csproj version and the tag from one prompt, so a
+      # mismatch here means the script failed partway through. Fail before we
+      # build or sign anything.
+      - name: Verify tag matches project version
+        shell: pwsh
+        run: |
+          $projVer = ([regex]'<Version>([^<]+)</Version>').Match(
+            [System.IO.File]::ReadAllText('Source/Metacraft.VcsHardware.csproj')).Groups[1].Value
+          $tagVer = '${{ github.ref_name }}'.TrimStart('v')
+          if ($projVer -ne $tagVer) {
+            throw "Ref '${{ github.ref_name }}' does not match csproj version '$projVer'."
+          }
+          Write-Host "Publishing version $projVer."
 
       - name: Restore
         run: dotnet restore Source/Metacraft.VcsHardware.csproj
@@ -67,5 +85,5 @@ jobs:
         shell: pwsh
         run: |
           Get-ChildItem .\artifacts\*.nupkg | ForEach-Object {
-            dotnet nuget push $_.FullName --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json --skip-duplicate
+            dotnet nuget push $_.FullName --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json
           }
