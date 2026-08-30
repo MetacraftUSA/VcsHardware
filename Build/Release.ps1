@@ -224,7 +224,13 @@ Invoke-Git push origin $Tag
 Write-Step "Dispatching $Workflow against $Tag"
 $dispatch = Invoke-Capture $Gh @('workflow', 'run', $Workflow, '--ref', $Tag)
 if ($dispatch.ExitCode -ne 0) {
-    throw "Failed to dispatch the workflow:`n$($dispatch.Output)"
+    # Everything above this point is already pushed, so the release itself is
+    # intact - only the publish needs kicking off.
+    Write-Host ""
+    Write-Host $dispatch.Output.Trim() -ForegroundColor Red
+    Write-Host "The release is pushed; only the publish failed to start. Run:" -ForegroundColor Yellow
+    Write-Host "    gh workflow run $Workflow --ref $Tag" -ForegroundColor Yellow
+    throw "Failed to dispatch $Workflow."
 }
 $dispatchOutput = $dispatch.Output
 Write-Host $dispatchOutput.Trim()
