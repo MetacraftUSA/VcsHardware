@@ -64,6 +64,20 @@ jobs:
             Register-PSRepository -Default
           }
 
+      # Globbed rather than hardcoded to one TFM path, so this keeps working if
+      # the project ever multi-targets. The throw matters: an empty file list
+      # signs nothing and the action still succeeds, which would publish an
+      # unsigned package.
+      - name: Collect assemblies to sign
+        id: bin
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem 'Source/bin/Release' -Recurse -Filter 'Metacraft.VcsHardware.dll' -ErrorAction SilentlyContinue)
+          if ($files.Count -eq 0) { throw "No Metacraft.VcsHardware.dll found under Source/bin/Release." }
+          $list = ($files | ForEach-Object { $_.FullName }) -join ','
+          "list=$list" >> $env:GITHUB_OUTPUT
+          Write-Host "Signing $($files.Count) file(s): $list"
+
       - name: Sign assembly       # signed BEFORE packing, so the package carries the signed DLL
         uses: azure/trusted-signing-action@v0
         with:
@@ -73,7 +87,7 @@ jobs:
           endpoint: https://eus.codesigning.azure.net/
           trusted-signing-account-name: MetacraftTrustedSigning
           certificate-profile-name: CodeSigning
-          files: ${{ github.workspace }}\Source\bin\Release\net8.0\Metacraft.VcsHardware.dll
+          files: ${{ steps.bin.outputs.list }}
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
