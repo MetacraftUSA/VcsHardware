@@ -105,34 +105,61 @@ public abstract class KeyboardReader<TEventArgs> : IDisposable
 	{
 		mDevice = null;
 
-		foreach (Guid deviceGuid in mDirectInput
+		// Filter candidates by VID/PID from the enumeration data alone. Do NOT
+		// construct a Joystick just to read Properties.VendorId/ProductId:
+		// SharpDX's device constructor permanently pins ~37 heap objects per
+		// construction (its data-format marshalling never frees the GCHandles,
+		// not even on Dispose). Doing that once per candidate per poll tick
+		// leaked pinned handles for as long as a reader kept searching.
+		foreach (DeviceInstance deviceInstance in mDirectInput
 			.GetDevices(DeviceClass.All, DeviceEnumerationFlags.AllDevices)
 			.Where(d => d.Type == DeviceType.Supplemental)
-			.Select(d => d.InstanceGuid)
-			.Where(mDirectInput.IsDeviceAttached)
+			.Where(d => MatchesThisKeyboardModel(d.ProductGuid))
+			.Where(d => mDirectInput.IsDeviceAttached(d.InstanceGuid))
 		) {
-			Joystick? device = null;
 			try {
-				device = new Joystick(mDirectInput, deviceGuid);
-				if (device.Properties.VendorId == VENDOR_ID && device.Properties.ProductId == ProductId) {
-					mDevice = device;
-					device = null;
-					mWasEverFound = true;
-					mLogger?.LogDebug("VCS {KeyboardName} keyboard found", KeyboardName);
-					return;
-				}
+				mDevice = new Joystick(mDirectInput, deviceInstance.InstanceGuid);
+				mWasEverFound = true;
+				mLogger?.LogDebug("VCS {KeyboardName} keyboard found", KeyboardName);
+				return;
 			}
 			catch (SharpDXException ex) {
-				mLogger?.LogError(ex, "Error inspecting candidate device");
-			}
-			finally {
-				device?.Dispose();
+				mLogger?.LogError(ex, "Error opening VCS keyboard device");
 			}
 		}
 
 		if (mWasEverFound) {
 			mLogger?.LogDebug("VCS {KeyboardName} keyboard not found", KeyboardName);
 		}
+	}
+
+	private bool MatchesThisKeyboardModel(Guid productGuid)
+	{
+		(int vendorId, int productId) = DecodeVidPid(productGuid);
+		return vendorId == VENDOR_ID && productId == ProductId;
+	}
+
+	/// <summary>
+	/// Extracts the USB vendor and product IDs that DirectInput encodes into
+	/// <see cref="DeviceInstance.ProductGuid"/> for HID devices.
+	/// </summary>
+	/// <remarks>
+	/// For HID devices DirectInput synthesizes the product GUID as
+	/// <c>{PPPPVVVV-0000-0000-0000-504944564944}</c>: <c>Data1</c> is
+	/// <c>(PID &lt;&lt; 16) | VID</c> and the trailing bytes spell "PIDVID".
+	/// This is the same value that backs <c>DIPROP_VIDPID</c>, which is what
+	/// <c>Joystick.Properties.VendorId</c>/<c>ProductId</c> read, so comparing
+	/// against it is like-for-like with the old property-based check.
+	/// <see cref="Guid.ToByteArray"/> always emits <c>Data1</c> as four
+	/// little-endian bytes regardless of host endianness, so the VID is bytes
+	/// 0-1 and the PID is bytes 2-3.
+	/// </remarks>
+	private static (int VendorId, int ProductId) DecodeVidPid(Guid productGuid)
+	{
+		byte[] bytes = productGuid.ToByteArray();
+		int vendorId = bytes[0] | (bytes[1] << 8);
+		int productId = bytes[2] | (bytes[3] << 8);
+		return (vendorId, productId);
 	}
 
 	private void StartScan()
