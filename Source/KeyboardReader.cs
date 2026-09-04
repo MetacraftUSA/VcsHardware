@@ -72,6 +72,15 @@ public abstract class KeyboardReader<TEventArgs> : IDisposable
 					return;
 				}
 
+				// HandleDisconnect uses TryEnter and skips TeardownScan when this
+				// lock is held (typically by this very timer). If that happened,
+				// the device is disconnected but mDevice is still set, which would
+				// otherwise stop the search from ever resuming. Finish the
+				// teardown here so the rescan below can run.
+				if (mDevice is not null && Volatile.Read(ref mScanActive) == 0) {
+					TeardownScan();
+				}
+
 				if (mDevice is null) {
 					CheckForDevice();
 					if (mDevice is not null) {
@@ -224,8 +233,10 @@ public abstract class KeyboardReader<TEventArgs> : IDisposable
 		}
 
 		// Take the lock to serialize with timer-driven StartScan, but skip
-		// if we can't get it immediately — Dispose may be in progress and
-		// holding the lock while waiting for us to return.
+		// if we can't get it immediately. Dispose may be in progress and
+		// holding the lock while waiting for us to return, or the timer's
+		// DoCheck may simply be holding it for its per-tick check. Blocking
+		// here would deadlock against Dispose, so we don't.
 		if (Monitor.TryEnter(mScanLock)) {
 			try {
 				if (Volatile.Read(ref mIsDisposed) == 0) {
@@ -235,6 +246,11 @@ public abstract class KeyboardReader<TEventArgs> : IDisposable
 			finally {
 				Monitor.Exit(mScanLock);
 			}
+		} else {
+			// Timer or Dispose holds the lock. mScanActive is already 0 with
+			// mDevice still set, which DoCheck recognizes and finishes tearing
+			// down on its next tick; Dispose does its own teardown.
+			mLogger?.LogDebug("VCS {KeyboardName} keyboard teardown deferred to next device check", KeyboardName);
 		}
 
 		if (Volatile.Read(ref mIsDisposed) == 0) {
